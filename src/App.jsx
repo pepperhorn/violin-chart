@@ -55,10 +55,27 @@ export default function App() {
   const sanitize = (s) => s.replace(/[^\w.-]+/g, '_');
   const filename = () => `violin-scale_${sanitize(keyStr)}_${sanitize(startStr)}-${sanitize(endStr)}`;
 
+  // html2canvas renders text ~8px lower than the browser for line-height
+  // centered content, so adjust line-heights in the clone only.
+  function adjustForCapture(doc) {
+    doc.querySelectorAll('.circle').forEach((el) => {
+      el.style.lineHeight = '1.75rem';
+      el.style.paddingBottom = '8px';
+    });
+    doc.querySelectorAll('.finger-label').forEach((el) => {
+      el.style.lineHeight = '0.85rem';
+      el.style.paddingBottom = '6px';
+    });
+  }
+
   async function downloadPng() {
     const node = printableRef.current;
     if (!node) return;
-    const canvas = await html2canvas(node, { backgroundColor: '#ffffff', scale: 2 });
+    const canvas = await html2canvas(node, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      onclone: (doc) => adjustForCapture(doc),
+    });
     const link = document.createElement('a');
     link.download = filename() + '.png';
     link.href = canvas.toDataURL('image/png');
@@ -68,7 +85,11 @@ export default function App() {
   async function downloadPdf() {
     const node = printableRef.current;
     if (!node) return;
-    const canvas = await html2canvas(node, { backgroundColor: '#ffffff', scale: 2 });
+    const canvas = await html2canvas(node, {
+      backgroundColor: '#ffffff',
+      scale: 2,
+      onclone: (doc) => adjustForCapture(doc),
+    });
     const imgData = canvas.toDataURL('image/png');
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
     const pageW = pdf.internal.pageSize.getWidth();
