@@ -5,6 +5,7 @@ import ChartDiagram from './ChartDiagram.jsx';
 import VexScore from './VexScore.jsx';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
+import { Soundfont } from 'smplr';
 
 // Build the set of every scale note (all octaves) for a key, filtered to
 // violin range — used to populate start/end dropdowns.
@@ -51,6 +52,44 @@ export default function App() {
   );
 
   const printableRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const violinRef = useRef(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+
+  function toSamplerNote(n) {
+    return `${n.letter}${n.accidental}${n.octave}`;
+  }
+
+  async function play() {
+    if (isPlaying || !scaleNotes.length) return;
+    try {
+      if (!audioCtxRef.current) {
+        audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') await ctx.resume();
+      if (!violinRef.current) {
+        setIsLoading(true);
+        violinRef.current = new Soundfont(ctx, { instrument: 'violin' });
+        await violinRef.current.load;
+        setIsLoading(false);
+      }
+      setIsPlaying(true);
+      const violin = violinRef.current;
+      const eighthSec = 60 / 100 / 2; // quarter=100 BPM, 8th notes = 0.3s each
+      const startAt = ctx.currentTime + 0.1;
+      scaleNotes.forEach((n, i) => {
+        violin.start({ note: toSamplerNote(n), time: startAt + i * eighthSec, duration: eighthSec * 0.95 });
+      });
+      const totalMs = (scaleNotes.length * eighthSec + 0.1) * 1000;
+      setTimeout(() => setIsPlaying(false), totalMs);
+    } catch (err) {
+      console.error(err);
+      setIsLoading(false);
+      setIsPlaying(false);
+    }
+  }
 
   const sanitize = (s) => s.replace(/[^\w.-]+/g, '_');
   const filename = () => `violin-scale_${sanitize(keyStr)}_${sanitize(startStr)}-${sanitize(endStr)}`;
@@ -108,6 +147,13 @@ export default function App() {
       <div className="app-header relative mb-3">
         <h1 className="app-title text-lg sm:text-2xl font-bold text-center">Violin Scale Chart</h1>
         <div className="download-buttons absolute top-0 right-0 flex gap-2">
+          <button
+            onClick={play}
+            disabled={isPlaying || isLoading}
+            className="btn-play px-3 py-1.5 border-2 border-black rounded text-sm font-semibold hover:bg-black hover:text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoading ? 'Loading…' : isPlaying ? 'Playing…' : '▶ Play'}
+          </button>
           <button onClick={downloadPng} className="btn-png px-3 py-1.5 border-2 border-black rounded text-sm font-semibold hover:bg-black hover:text-white transition">PNG</button>
           <button onClick={downloadPdf} className="btn-pdf px-3 py-1.5 border-2 border-black rounded text-sm font-semibold hover:bg-black hover:text-white transition">PDF</button>
         </div>
