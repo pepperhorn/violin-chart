@@ -64,10 +64,10 @@ export default function ChartDiagram({ placements, activeIndex, hiddenKeys, solv
   return (
     <div className="chart-diagram w-full max-w-2xl mx-auto">
       <div
-        className="chart-header grid grid-cols-[3.25rem_repeat(4,1fr)] items-end mb-1"
+        className="chart-header grid grid-cols-[3.25rem_repeat(4,1fr)] items-center mb-1"
         style={{ paddingInline: padFor(0) }}
       >
-        <div className="open-label text-right pr-2 text-sm font-semibold italic leading-none">(Open)</div>
+        <div className="open-label text-right pr-2 text-sm font-semibold italic leading-none">Open</div>
         {STRINGS.map((s) => {
           const cell = grid[s][0];
           const openActive = cell?.isActive;
@@ -141,17 +141,21 @@ export default function ChartDiagram({ placements, activeIndex, hiddenKeys, solv
                 <div key={s} className="cell relative flex items-center justify-center">
                   {showFpLabel && !hiddenHere && (
                     <span
-                      className="fp-label absolute text-xs font-semibold whitespace-nowrap leading-none"
-                      style={{ right: 'calc(50% + 1.6rem + 10px)' }}
+                      className="fp-label hidden sm:inline absolute text-xs font-semibold whitespace-nowrap leading-none right-[calc(50%+1.75rem+10px)]"
                     >
                       {cell.label}
                     </span>
                   )}
                   <div
-                    className={`circle w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-black text-center text-sm font-semibold leading-[2.75rem] sm:leading-[3.25rem] transition-colors ${bg}`}
+                    className={`circle relative w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-black text-center text-sm font-semibold leading-[2.75rem] sm:leading-[3.25rem] transition-colors ${bg}`}
                     onClick={hiddenHere ? () => onCellClick?.(cell) : undefined}
                     role={hiddenHere ? 'button' : undefined}
                   >
+                    {showFpLabel && !hiddenHere && (
+                      <span className="fp-label-inner sm:hidden absolute left-0 right-0 top-1 text-[0.55rem] font-semibold leading-none">
+                        {cell.label}
+                      </span>
+                    )}
                     {hiddenHere ? '?' : cell ? cell.display : ''}
                   </div>
                 </div>

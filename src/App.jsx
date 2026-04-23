@@ -73,13 +73,19 @@ export default function App() {
     return [...seen.values()];
   }, [placements]);
 
+  const [bpm, setBpm] = useState(100);
+  const [tempoOpen, setTempoOpen] = useState(false);
   const [quizMode, setQuizMode] = useState('off'); // 'off' | 'full' | 'partial'
   const [quizPercent, setQuizPercent] = useState(50);
   const [shuffleSeed, setShuffleSeed] = useState(0);
   const [solvedKeys, setSolvedKeys] = useState(new Set());
+  const [quizResults, setQuizResults] = useState({}); // key -> { triesUsed, correct }
   const [activeQuiz, setActiveQuiz] = useState(null); // quiz cell
   const [triesLeft, setTriesLeft] = useState(3);
   const [feedback, setFeedback] = useState(null);
+
+  const levelMult = level === 'pro' ? 2 : level === 'intermediate' ? 1.5 : 1;
+  const pointsForTries = (t) => (t === 1 ? 3 : t === 2 ? 2 : t === 3 ? 1 : 0);
 
   const hiddenKeys = useMemo(() => {
     if (quizMode === 'off') return new Set();
@@ -88,9 +94,21 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quizMode, quizPercent, quizCells, shuffleSeed]);
 
+  const quizScore = useMemo(() => {
+    const total = hiddenKeys.size;
+    let earned = 0;
+    for (const key of hiddenKeys) {
+      const r = quizResults[key];
+      if (r?.correct) earned += pointsForTries(r.triesUsed);
+    }
+    const max = total * 3 * levelMult;
+    return { earned: Math.round(earned * levelMult * 10) / 10, max: Math.round(max * 10) / 10, total };
+  }, [hiddenKeys, quizResults, levelMult]);
+
   // Reset quiz progress when inputs change.
   useEffect(() => {
     setSolvedKeys(new Set());
+    setQuizResults({});
     setActiveQuiz(null);
     setFeedback(null);
   }, [quizMode, shuffleSeed, scaleNotes, level]);
@@ -158,6 +176,8 @@ export default function App() {
     const ok = isCorrectGuess(value, activeQuiz.note);
     if (ok) {
       setFeedback('correct');
+      const triesUsed = 4 - triesLeft;
+      setQuizResults((prev) => ({ ...prev, [activeQuiz.key]: { triesUsed, correct: true } }));
       setSolvedKeys((prev) => {
         const next = new Set(prev);
         next.add(activeQuiz.key);
@@ -175,6 +195,7 @@ export default function App() {
       setTimeout(() => setFeedback(null), 400);
       if (remaining <= 0) {
         setFeedback('revealed');
+        setQuizResults((prev) => ({ ...prev, [activeQuiz.key]: { triesUsed: 3, correct: false } }));
         setSolvedKeys((prev) => {
           const next = new Set(prev);
           next.add(activeQuiz.key);
@@ -209,7 +230,7 @@ export default function App() {
       }
       const violin = violinRef.current;
       setIsPlaying(true);
-      const eighthSec = 60 / 100 / 2; // quarter=100 BPM, 8th notes = 0.3s each
+      const eighthSec = 60 / bpm / 2; // 8th note duration at current BPM
       const leadSec = 0.1;
       const startAt = ctx.currentTime + leadSec;
       scaleNotes.forEach((n, i) => {
@@ -289,30 +310,45 @@ export default function App() {
   return (
     <div className="app min-h-screen bg-white text-black p-3 sm:p-6">
       <div className="app-header relative mb-3">
-        <h1 className="app-title text-lg sm:text-2xl font-bold text-center">Violin Scale Chart</h1>
-        <div className="download-buttons absolute top-0 right-0 flex gap-2">
+        <h1 className="app-title text-sm sm:text-2xl font-bold text-left sm:text-center pr-2">Violin Scale Chart</h1>
+        <div className="download-buttons absolute top-0 right-0 flex gap-1 sm:gap-2">
           <button
             onClick={play}
             disabled={isPlaying || isLoading}
-            className="btn-play px-3 py-1.5 border-2 border-black rounded text-sm font-semibold hover:bg-black hover:text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-play px-2 sm:px-3 py-1 sm:py-1.5 border-2 border-black rounded text-xs sm:text-sm font-semibold hover:bg-black hover:text-white transition disabled:opacity-50 disabled:cursor-not-allowed"
+            title="Play"
           >
-            {isLoading ? 'Loading…' : isPlaying ? 'Playing…' : '▶ Play'}
+            {isLoading ? '…' : isPlaying ? '♪' : '▶'}
           </button>
           {quizMode === 'partial' && (
             <button
               onClick={() => setShuffleSeed((k) => k + 1)}
-              className="btn-shuffle px-3 py-1.5 border-2 border-black rounded text-sm font-semibold hover:bg-black hover:text-white transition"
+              className="btn-shuffle px-2 sm:px-3 py-1 sm:py-1.5 border-2 border-black rounded text-xs sm:text-sm font-semibold hover:bg-black hover:text-white transition"
               title="Shuffle hidden notes"
             >
-              ⤭ Shuffle
+              ⤭
             </button>
           )}
-          <button onClick={downloadPng} className="btn-png px-3 py-1.5 border-2 border-black rounded text-sm font-semibold hover:bg-black hover:text-white transition">PNG</button>
-          <button onClick={downloadPdf} className="btn-pdf px-3 py-1.5 border-2 border-black rounded text-sm font-semibold hover:bg-black hover:text-white transition">PDF</button>
+          <button
+            onClick={() => {/* TODO: open share modal */}}
+            className="btn-share px-1 text-black hover:text-black/60 transition"
+            title="Share"
+            aria-label="Share"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5 sm:w-6 sm:h-6">
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+            </svg>
+          </button>
+          <button onClick={downloadPng} className="btn-png px-2 sm:px-3 py-1 sm:py-1.5 border-2 border-black rounded text-xs sm:text-sm font-semibold hover:bg-black hover:text-white transition">PNG</button>
+          <button onClick={downloadPdf} className="btn-pdf px-2 sm:px-3 py-1 sm:py-1.5 border-2 border-black rounded text-xs sm:text-sm font-semibold hover:bg-black hover:text-white transition">PDF</button>
         </div>
       </div>
 
-      <div className="controls grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 max-w-2xl mx-auto">
+      <div className="controls grid grid-cols-3 gap-2 sm:gap-3 mb-3 max-w-2xl mx-auto">
         <label className="control-key flex flex-col text-xs font-semibold">
           Key
           <select value={keyStr} onChange={(e) => setKeyStr(e.target.value)} className="select-key mt-1 border-2 border-black rounded px-2 py-1.5 text-sm font-normal">
@@ -333,6 +369,9 @@ export default function App() {
             {noteOptions.map((n) => <option key={n} value={n}>{n}</option>)}
           </select>
         </label>
+      </div>
+
+      <div className="controls-secondary grid grid-cols-3 gap-2 sm:gap-3 mb-4 max-w-2xl mx-auto">
         <label className="control-level flex flex-col text-xs font-semibold">
           Level
           <select value={level} onChange={(e) => setLevel(e.target.value)} className="select-level mt-1 border-2 border-black rounded px-2 py-1.5 text-sm font-normal">
@@ -341,9 +380,6 @@ export default function App() {
             <option value="pro">Pro</option>
           </select>
         </label>
-      </div>
-
-      <div className="quiz-controls flex flex-wrap items-end justify-center gap-3 mb-4 max-w-2xl mx-auto">
         <label className="control-quiz flex flex-col text-xs font-semibold">
           Quiz
           <select
@@ -356,8 +392,73 @@ export default function App() {
             <option value="partial">Partial</option>
           </select>
         </label>
+        <div className="control-tempo flex flex-col text-xs font-semibold">
+          Tempo
+          <button
+            type="button"
+            onClick={() => setTempoOpen((v) => !v)}
+            className="btn-tempo-toggle mt-1 border-2 border-black rounded px-2 py-1.5 text-sm font-normal text-left flex items-center justify-between hover:bg-black hover:text-white transition"
+            aria-expanded={tempoOpen}
+          >
+            <span>{bpm} BPM</span>
+            <span className="text-xs">{tempoOpen ? '▲' : '▼'}</span>
+          </button>
+        </div>
+        {tempoOpen && (
+          <label className="control-bpm col-span-3 flex flex-col text-xs font-semibold">
+            Tempo {bpm} BPM
+            <input
+              type="range"
+              min={60}
+              max={240}
+              step={1}
+              value={bpm}
+              onChange={(e) => setBpm(Number(e.target.value))}
+              className="slider-bpm mt-1 accent-black"
+            />
+          </label>
+        )}
+        {quizMode !== 'off' && quizScore.total > 0 && (() => {
+          const pct = quizScore.max > 0 ? Math.round((quizScore.earned / quizScore.max) * 100) : 0;
+          const answered = Object.keys(quizResults).filter((k) => hiddenKeys.has(k)).length;
+          const isComplete = answered >= quizScore.total;
+          return (
+            <div className="quiz-score col-span-3 flex flex-col gap-1">
+              <div className="quiz-score-row flex items-center justify-between text-xs font-semibold">
+                <span>{isComplete ? `FINAL SCORE: ${pct}%` : `Score: ${pct}%`}</span>
+                <span className="quiz-score-meta font-normal text-slate-600">{quizScore.total} note{quizScore.total === 1 ? '' : 's'} · {level} ×{levelMult}</span>
+              </div>
+              <div className="quiz-score-bar w-full h-2 rounded-full bg-slate-200 overflow-hidden">
+                <div
+                  className="quiz-score-bar-fill h-full bg-black transition-[width] duration-500 ease-out"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              {isComplete && (
+                <div className="quiz-score-actions flex gap-2 justify-center mt-1">
+                  <button
+                    type="button"
+                    onClick={() => { setQuizResults({}); setSolvedKeys(new Set()); setActiveQuiz(null); setFeedback(null); }}
+                    className="btn-try-again border-2 border-black rounded px-3 py-1 text-xs font-semibold hover:bg-black hover:text-white transition"
+                  >
+                    Try again
+                  </button>
+                  {quizMode === 'partial' && (
+                    <button
+                      type="button"
+                      onClick={() => setShuffleSeed((k) => k + 1)}
+                      className="btn-score-shuffle border-2 border-black rounded px-3 py-1 text-xs font-semibold hover:bg-black hover:text-white transition"
+                    >
+                      ⤭ Shuffle
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {quizMode === 'partial' && (
-          <label className="control-quiz-percent flex flex-col text-xs font-semibold w-60">
+          <label className="control-quiz-percent col-span-3 flex flex-col text-xs font-semibold">
             Hide {quizPercent}%
             <input
               type="range"
@@ -372,7 +473,7 @@ export default function App() {
         )}
       </div>
 
-      <div ref={printableRef} className="printable bg-white p-6 sm:p-10 border border-black/10 max-w-3xl mx-auto relative" style={{ aspectRatio: '210 / 297' }}>
+      <div ref={printableRef} className="printable bg-white p-2 sm:p-10 border border-black/10 max-w-3xl mx-auto relative" style={{ aspectRatio: '210 / 297' }}>
         <QuizBar
           cell={activeQuiz}
           triesLeft={triesLeft}

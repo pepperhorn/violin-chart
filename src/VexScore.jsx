@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Renderer,
   Stave,
@@ -16,8 +16,11 @@ function vfKey(n) {
 }
 
 export default function VexScore({ scaleNotes, placements, keyStr, activeIndex }) {
+  const wrapRef = useRef(null);
   const containerRef = useRef(null);
   const [noteCenters, setNoteCenters] = useState([]);
+  const [intrinsic, setIntrinsic] = useState({ w: 0, h: 0 });
+  const [wrapW, setWrapW] = useState(0);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -74,7 +77,20 @@ export default function VexScore({ scaleNotes, placements, keyStr, activeIndex }
     voice.draw(ctx, stave);
     beams.forEach((b) => b.setContext(ctx).draw());
 
-    // After draw, capture note-head centres for the highlight overlay.
+    // Make the SVG responsive: use viewBox + max-width so it scales down on
+    // narrow screens without horizontal scrolling.
+    const svg = el.querySelector('svg');
+    if (svg) {
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      svg.removeAttribute('width');
+      svg.removeAttribute('height');
+      svg.style.maxWidth = '100%';
+      svg.style.height = 'auto';
+      svg.style.display = 'block';
+    }
+    setIntrinsic({ w: width, h: height });
+
     const centres = notes.map((note) => {
       const x = note.getAbsoluteX();
       const ys = note.getYs();
@@ -84,17 +100,28 @@ export default function VexScore({ scaleNotes, placements, keyStr, activeIndex }
     setNoteCenters(centres);
   }, [scaleNotes, placements, keyStr]);
 
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => setWrapW(el.clientWidth);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const scale = intrinsic.w && wrapW ? Math.min(1, wrapW / intrinsic.w) : 1;
   const active = activeIndex != null ? noteCenters[activeIndex] : null;
 
   return (
-    <div className="vex-score max-w-full overflow-x-auto mx-auto flex justify-center relative">
+    <div ref={wrapRef} className="vex-score w-full mx-auto relative">
       <div ref={containerRef} className="vex-score-svg" />
       {active && (
         <div
           className="vex-highlight absolute pointer-events-none rounded-full border-[3px] border-yellow-400 bg-yellow-200/60 mix-blend-multiply"
           style={{
-            left: active.x - 14,
-            top: active.y - 14,
+            left: active.x * scale - 14,
+            top: active.y * scale - 14,
             width: 28,
             height: 28,
           }}
