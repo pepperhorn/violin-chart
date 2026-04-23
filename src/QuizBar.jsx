@@ -23,8 +23,8 @@ export default function QuizBar({ cell, onSubmit, onCancel, onPlayNote, feedback
   }
 
   return (
-    <div className="quiz-bar sticky top-0 z-20 bg-yellow-50 border-2 border-black rounded-lg px-3 py-2 mb-3 flex flex-wrap items-center gap-2 shadow">
-      <span className="quiz-prompt text-sm font-semibold flex-1 min-w-[12rem]">{prompt}</span>
+    <div className="quiz-bar sticky top-0 z-20 rounded-md px-3 py-2 mb-3 flex flex-wrap items-center gap-2">
+      <span className="quiz-prompt font-display italic text-sm sm:text-base flex-1 min-w-[12rem]" style={{ color: 'var(--ink)' }}>{prompt}</span>
       <form onSubmit={handleSubmit} className="quiz-form flex items-center gap-2">
         <input
           ref={inputRef}
@@ -32,15 +32,20 @@ export default function QuizBar({ cell, onSubmit, onCancel, onPlayNote, feedback
           value={value}
           onChange={(e) => setValue(e.target.value)}
           disabled={locked}
-          placeholder="e.g. F# or Gb"
-          className={`quiz-input w-24 border-2 border-black rounded px-2 py-1 text-sm font-semibold uppercase ${feedback === 'wrong' ? 'quiz-input-wrong bg-red-100 animate-pulse' : ''}`}
+          placeholder="F# or Gb"
+          className={`quiz-input w-24 rounded px-2 py-1 text-sm font-semibold uppercase border ${feedback === 'wrong' ? 'animate-pulse' : ''}`}
+          style={{
+            borderColor: feedback === 'wrong' ? 'var(--rust)' : 'var(--rule)',
+            background: feedback === 'wrong' ? '#F9D9C9' : 'transparent',
+            color: 'var(--ink)',
+          }}
           maxLength={3}
           autoComplete="off"
         />
         <button
           type="button"
           onClick={onPlayNote}
-          className="btn-quiz-play px-2 py-1 border-2 border-black rounded text-sm font-semibold hover:bg-black hover:text-white transition"
+          className="btn-quiz-play btn-pill-accent px-2 py-1 text-sm font-semibold"
           aria-label="Play the note"
           title="Play the note"
         >
@@ -49,17 +54,18 @@ export default function QuizBar({ cell, onSubmit, onCancel, onPlayNote, feedback
         <button
           type="submit"
           disabled={locked}
-          className="btn-quiz-submit px-3 py-1 border-2 border-black rounded text-sm font-semibold bg-black text-white hover:bg-white hover:text-black transition disabled:opacity-50"
+          className="btn-quiz-submit px-3 py-1 rounded-full text-sm font-semibold transition disabled:opacity-50"
+          style={{ background: 'var(--ink)', color: 'var(--ivory)', border: '1px solid var(--ink)' }}
         >
           Check
         </button>
-        <span className="quiz-tries text-xs font-semibold whitespace-nowrap">
-          Tries: {triesLeft}
+        <span className="quiz-tries label-caps whitespace-nowrap">
+          Tries · {triesLeft}
         </span>
         <button
           type="button"
           onClick={onCancel}
-          className="btn-quiz-cancel px-2 py-1 border-2 border-black rounded text-sm font-semibold hover:bg-black hover:text-white transition"
+          className="btn-quiz-cancel btn-pill px-2 py-1 text-sm font-semibold"
           aria-label="Close"
         >
           ×

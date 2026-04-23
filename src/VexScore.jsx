@@ -118,12 +118,14 @@ export default function VexScore({ scaleNotes, placements, keyStr, activeIndex }
       <div ref={containerRef} className="vex-score-svg" />
       {active && (
         <div
-          className="vex-highlight absolute pointer-events-none rounded-full border-[3px] border-yellow-400 bg-yellow-200/60 mix-blend-multiply"
+          className="vex-highlight absolute pointer-events-none rounded-full mix-blend-multiply"
           style={{
             left: active.x * scale - 14,
             top: active.y * scale - 14,
             width: 28,
             height: 28,
+            border: '3px solid var(--rosin)',
+            background: 'color-mix(in srgb, var(--saffron-soft) 70%, transparent)',
           }}
         />
       )}

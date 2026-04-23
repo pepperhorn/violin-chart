@@ -67,18 +67,18 @@ export default function ChartDiagram({ placements, activeIndex, hiddenKeys, solv
         className="chart-header grid grid-cols-[3.25rem_repeat(4,1fr)] items-center mb-1"
         style={{ paddingInline: padFor(0) }}
       >
-        <div className="open-label text-right pr-2 text-sm font-semibold italic leading-none">Open</div>
+        <div className="open-label text-right pr-2 text-sm italic leading-none font-display" style={{ color: 'var(--rosin-deep)' }}>Open</div>
         {STRINGS.map((s) => {
           const cell = grid[s][0];
           const openActive = cell?.isActive;
           const hiddenHere = cell && isHidden(cell.key);
           const isQuizActive = cell && activeQuizKey === cell.key;
-          const base = 'open-circle w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-black text-center text-lg sm:text-xl font-bold leading-[2.75rem] sm:leading-[3.25rem] transition-colors';
+          const base = 'open-circle w-12 h-12 sm:w-14 sm:h-14 rounded-full text-center text-lg sm:text-xl font-bold leading-[2.75rem] sm:leading-[3.25rem] transition-colors';
           const activeCls = openActive
-            ? 'bg-yellow-200 text-black'
+            ? 'hl-saffron ring-2 ring-[color:var(--rosin)]'
             : hiddenHere
-              ? (isQuizActive ? 'bg-yellow-100 text-black cursor-pointer' : 'bg-white text-black cursor-pointer')
-              : 'bg-black text-white';
+              ? (isQuizActive ? 'bg-[color:var(--saffron-soft)] text-[color:var(--ink)] cursor-pointer ring-2 ring-[color:var(--rosin)]' : 'bg-[color:var(--ivory)] text-[color:var(--ink)] cursor-pointer ring-2 ring-[color:var(--rule)]')
+              : 'bg-[color:var(--ink)] text-[color:var(--ivory)]';
           return (
             <div key={s} className="string-label flex justify-center">
               <div
@@ -108,8 +108,9 @@ export default function ChartDiagram({ placements, activeIndex, hiddenKeys, solv
                 y1={topY}
                 x2={xAt(i, padFor(n - 1))}
                 y2={botY}
-                stroke="black"
-                strokeWidth="2"
+                stroke="var(--ink)"
+                strokeWidth="1.5"
+                strokeLinecap="round"
               />
             ))}
           </svg>
@@ -122,7 +123,7 @@ export default function ChartDiagram({ placements, activeIndex, hiddenKeys, solv
             style={{ paddingInline: padFor(idx) }}
           >
             <div className="row-label text-right pr-2 flex justify-end items-center">
-              <span className="finger-label inline-block min-w-7 h-7 px-1.5 rounded-full border-2 border-black bg-white text-center text-sm font-semibold whitespace-nowrap" style={{ lineHeight: '1.375rem' }}>
+              <span className="finger-label inline-block min-w-7 h-7 px-1.5 rounded-full border-[1.5px] text-center text-sm font-semibold whitespace-nowrap" style={{ lineHeight: '1.375rem', borderColor: 'var(--rule)', background: 'var(--ivory)', color: 'var(--ink)' }}>
                 {rowLabelFor(row)}
               </span>
             </div>
@@ -133,26 +134,28 @@ export default function ChartDiagram({ placements, activeIndex, hiddenKeys, solv
               const hiddenHere = cell && isHidden(cell.key);
               const isQuizActive = cell && activeQuizKey === cell.key;
               const bg = cell?.isActive
-                ? 'bg-yellow-200 text-black'
+                ? 'hl-saffron'
                 : hiddenHere
-                  ? (isQuizActive ? 'bg-yellow-100 text-black cursor-pointer' : 'bg-white text-black cursor-pointer')
-                  : 'bg-white';
+                  ? (isQuizActive ? 'bg-[color:var(--saffron-soft)] text-[color:var(--ink)] cursor-pointer' : 'bg-[color:var(--ivory)] text-[color:var(--ink)] cursor-pointer')
+                  : 'bg-[color:var(--ivory)] text-[color:var(--ink)]';
               return (
                 <div key={s} className="cell relative flex items-center justify-center">
                   {showFpLabel && !hiddenHere && (
                     <span
                       className="fp-label hidden sm:inline absolute text-xs font-semibold whitespace-nowrap leading-none right-[calc(50%+1.75rem+10px)]"
+                      style={{ color: 'var(--rosin-deep)' }}
                     >
                       {cell.label}
                     </span>
                   )}
                   <div
-                    className={`circle relative w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-black text-center text-sm font-semibold leading-[2.75rem] sm:leading-[3.25rem] transition-colors ${bg}`}
+                    className={`circle relative w-12 h-12 sm:w-14 sm:h-14 rounded-full border-[1.5px] text-center text-sm font-semibold leading-[2.75rem] sm:leading-[3.25rem] transition-colors ${bg}`}
+                    style={{ borderColor: cell?.isActive ? 'var(--rosin)' : 'var(--rule)' }}
                     onClick={hiddenHere ? () => onCellClick?.(cell) : undefined}
                     role={hiddenHere ? 'button' : undefined}
                   >
                     {showFpLabel && !hiddenHere && (
-                      <span className="fp-label-inner sm:hidden absolute left-0 right-0 top-1 text-[0.55rem] font-semibold leading-none">
+                      <span className="fp-label-inner sm:hidden absolute left-0 right-0 top-1 text-[0.55rem] font-semibold leading-none" style={{ color: 'var(--rosin-deep)' }}>
                         {cell.label}
                       </span>
                     )}
