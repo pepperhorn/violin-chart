@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Renderer,
   Stave,
@@ -15,17 +15,19 @@ function vfKey(n) {
   return `${letter}${acc}/${n.octave}`;
 }
 
-export default function VexScore({ scaleNotes, placements, keyStr }) {
+export default function VexScore({ scaleNotes, placements, keyStr, activeIndex }) {
   const containerRef = useRef(null);
+  const [noteCenters, setNoteCenters] = useState([]);
 
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     el.innerHTML = '';
+    setNoteCenters([]);
     if (!scaleNotes.length) return;
 
     const perNote = 38;
-    const padding = 120; // clef + key signature
+    const padding = 120;
     const staveWidth = Math.max(320, padding + scaleNotes.length * perNote);
     const width = staveWidth + 20;
     const height = 160;
@@ -65,15 +67,39 @@ export default function VexScore({ scaleNotes, placements, keyStr }) {
     });
 
     const beams = Beam.generateBeams(notes);
-
     const voice = new Voice({ num_beats: notes.length, beat_value: 8 });
     voice.setStrict(false);
     voice.addTickables(notes);
-
     new Formatter().joinVoices([voice]).format([voice], staveWidth - padding);
     voice.draw(ctx, stave);
     beams.forEach((b) => b.setContext(ctx).draw());
+
+    // After draw, capture note-head centres for the highlight overlay.
+    const centres = notes.map((note) => {
+      const x = note.getAbsoluteX();
+      const ys = note.getYs();
+      const y = ys && ys.length ? ys[0] : stave.getYForLine(2);
+      return { x, y };
+    });
+    setNoteCenters(centres);
   }, [scaleNotes, placements, keyStr]);
 
-  return <div ref={containerRef} className="vex-score max-w-full overflow-x-auto mx-auto flex justify-center" />;
+  const active = activeIndex != null ? noteCenters[activeIndex] : null;
+
+  return (
+    <div className="vex-score max-w-full overflow-x-auto mx-auto flex justify-center relative">
+      <div ref={containerRef} className="vex-score-svg" />
+      {active && (
+        <div
+          className="vex-highlight absolute pointer-events-none rounded-full border-[3px] border-yellow-400 bg-yellow-200/60 mix-blend-multiply"
+          style={{
+            left: active.x - 14,
+            top: active.y - 14,
+            width: 28,
+            height: 28,
+          }}
+        />
+      )}
+    </div>
+  );
 }

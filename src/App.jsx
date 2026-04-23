@@ -3,9 +3,12 @@ import { KEYS, generateScale, toMidi, noteWithOctave, parseNoteOctave } from './
 import { fingeringFor, RANGE_LO, RANGE_HI } from './fingering.js';
 import ChartDiagram from './ChartDiagram.jsx';
 import VexScore from './VexScore.jsx';
+import QuizBar from './QuizBar.jsx';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { Soundfont } from 'smplr';
+import confetti from 'canvas-confetti';
+import { isCorrectGuess, pickHiddenKeys } from './quiz.js';
 
 // Build the set of every scale note (all octaves) for a key, filtered to
 // violin range — used to populate start/end dropdowns.
@@ -51,14 +54,143 @@ export default function App() {
     [scaleNotes, level],
   );
 
+  // Unique (string:row) quiz cells derived from placements.
+  const quizCells = useMemo(() => {
+    const seen = new Map();
+    placements.forEach((p) => {
+      if (!p.fp) return;
+      const key = `${p.fp.string}:${p.fp.row}`;
+      if (!seen.has(key)) {
+        seen.set(key, {
+          key,
+          string: p.fp.string,
+          row: p.fp.row,
+          fingerLabel: p.fp.label,
+          note: p.note,
+        });
+      }
+    });
+    return [...seen.values()];
+  }, [placements]);
+
+  const [quizMode, setQuizMode] = useState('off'); // 'off' | 'full' | 'partial'
+  const [quizPercent, setQuizPercent] = useState(50);
+  const [shuffleSeed, setShuffleSeed] = useState(0);
+  const [solvedKeys, setSolvedKeys] = useState(new Set());
+  const [activeQuiz, setActiveQuiz] = useState(null); // quiz cell
+  const [triesLeft, setTriesLeft] = useState(3);
+  const [feedback, setFeedback] = useState(null);
+
+  const hiddenKeys = useMemo(() => {
+    if (quizMode === 'off') return new Set();
+    if (quizMode === 'full') return new Set(quizCells.map((c) => c.key));
+    return pickHiddenKeys(quizCells, quizPercent);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quizMode, quizPercent, quizCells, shuffleSeed]);
+
+  // Reset quiz progress when inputs change.
+  useEffect(() => {
+    setSolvedKeys(new Set());
+    setActiveQuiz(null);
+    setFeedback(null);
+  }, [quizMode, shuffleSeed, scaleNotes, level]);
+
   const printableRef = useRef(null);
   const audioCtxRef = useRef(null);
   const violinRef = useRef(null);
+  const playTimersRef = useRef([]);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(null);
+
+  useEffect(() => {
+    setActiveIndex(null);
+    playTimersRef.current.forEach(clearTimeout);
+    playTimersRef.current = [];
+  }, [scaleNotes]);
 
   function toSamplerNote(n) {
     return `${n.letter}${n.accidental}${n.octave}`;
+  }
+
+  async function ensureViolin() {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    const ctx = audioCtxRef.current;
+    if (ctx.state === 'suspended') await ctx.resume();
+    if (!violinRef.current) {
+      setIsLoading(true);
+      violinRef.current = new Soundfont(ctx, { instrument: 'violin' });
+      await violinRef.current.load;
+      setIsLoading(false);
+    }
+    return { ctx, violin: violinRef.current };
+  }
+
+  async function playOneNote(n) {
+    try {
+      const { ctx, violin } = await ensureViolin();
+      violin.start({ note: toSamplerNote(n), time: ctx.currentTime + 0.02, duration: 1.0 });
+    } catch (err) {
+      console.error(err);
+      setIsLoading(false);
+    }
+  }
+
+  function onQuizCellClick(cell) {
+    setActiveQuiz(cell);
+    setTriesLeft(3);
+    setFeedback(null);
+  }
+
+  function celebrate() {
+    confetti({
+      particleCount: 80,
+      spread: 70,
+      origin: { y: 0.25 },
+      zIndex: 50,
+    });
+  }
+
+  function onQuizSubmit(value) {
+    if (!activeQuiz) return;
+    const ok = isCorrectGuess(value, activeQuiz.note);
+    if (ok) {
+      setFeedback('correct');
+      setSolvedKeys((prev) => {
+        const next = new Set(prev);
+        next.add(activeQuiz.key);
+        return next;
+      });
+      celebrate();
+      setTimeout(() => {
+        setActiveQuiz(null);
+        setFeedback(null);
+      }, 900);
+    } else {
+      const remaining = triesLeft - 1;
+      setTriesLeft(remaining);
+      setFeedback('wrong');
+      setTimeout(() => setFeedback(null), 400);
+      if (remaining <= 0) {
+        setFeedback('revealed');
+        setSolvedKeys((prev) => {
+          const next = new Set(prev);
+          next.add(activeQuiz.key);
+          return next;
+        });
+        setTimeout(() => {
+          setActiveQuiz(null);
+          setFeedback(null);
+        }, 1500);
+      }
+    }
+  }
+
+  function onQuizCancel() {
+    setActiveQuiz(null);
+    setFeedback(null);
   }
 
   async function play() {
@@ -75,15 +207,27 @@ export default function App() {
         await violinRef.current.load;
         setIsLoading(false);
       }
-      setIsPlaying(true);
       const violin = violinRef.current;
+      setIsPlaying(true);
       const eighthSec = 60 / 100 / 2; // quarter=100 BPM, 8th notes = 0.3s each
-      const startAt = ctx.currentTime + 0.1;
+      const leadSec = 0.1;
+      const startAt = ctx.currentTime + leadSec;
       scaleNotes.forEach((n, i) => {
         violin.start({ note: toSamplerNote(n), time: startAt + i * eighthSec, duration: eighthSec * 0.95 });
       });
-      const totalMs = (scaleNotes.length * eighthSec + 0.1) * 1000;
-      setTimeout(() => setIsPlaying(false), totalMs);
+      const leadMs = leadSec * 1000;
+      const eighthMs = eighthSec * 1000;
+      playTimersRef.current.forEach(clearTimeout);
+      playTimersRef.current = [];
+      scaleNotes.forEach((_, i) => {
+        playTimersRef.current.push(setTimeout(() => setActiveIndex(i), leadMs + i * eighthMs));
+      });
+      playTimersRef.current.push(
+        setTimeout(() => {
+          setActiveIndex(null);
+          setIsPlaying(false);
+        }, leadMs + scaleNotes.length * eighthMs)
+      );
     } catch (err) {
       console.error(err);
       setIsLoading(false);
@@ -154,6 +298,15 @@ export default function App() {
           >
             {isLoading ? 'Loading…' : isPlaying ? 'Playing…' : '▶ Play'}
           </button>
+          {quizMode === 'partial' && (
+            <button
+              onClick={() => setShuffleSeed((k) => k + 1)}
+              className="btn-shuffle px-3 py-1.5 border-2 border-black rounded text-sm font-semibold hover:bg-black hover:text-white transition"
+              title="Shuffle hidden notes"
+            >
+              ⤭ Shuffle
+            </button>
+          )}
           <button onClick={downloadPng} className="btn-png px-3 py-1.5 border-2 border-black rounded text-sm font-semibold hover:bg-black hover:text-white transition">PNG</button>
           <button onClick={downloadPdf} className="btn-pdf px-3 py-1.5 border-2 border-black rounded text-sm font-semibold hover:bg-black hover:text-white transition">PDF</button>
         </div>
@@ -190,14 +343,59 @@ export default function App() {
         </label>
       </div>
 
-      <div ref={printableRef} className="printable bg-white p-6 sm:p-10 border border-black/10 max-w-3xl mx-auto" style={{ aspectRatio: '210 / 297' }}>
+      <div className="quiz-controls flex flex-wrap items-end justify-center gap-3 mb-4 max-w-2xl mx-auto">
+        <label className="control-quiz flex flex-col text-xs font-semibold">
+          Quiz
+          <select
+            value={quizMode}
+            onChange={(e) => setQuizMode(e.target.value)}
+            className="select-quiz mt-1 border-2 border-black rounded px-2 py-1.5 text-sm font-normal"
+          >
+            <option value="off">Off</option>
+            <option value="full">Full</option>
+            <option value="partial">Partial</option>
+          </select>
+        </label>
+        {quizMode === 'partial' && (
+          <label className="control-quiz-percent flex flex-col text-xs font-semibold w-60">
+            Hide {quizPercent}%
+            <input
+              type="range"
+              min={20}
+              max={80}
+              step={5}
+              value={quizPercent}
+              onChange={(e) => setQuizPercent(Number(e.target.value))}
+              className="slider-quiz mt-1 accent-black"
+            />
+          </label>
+        )}
+      </div>
+
+      <div ref={printableRef} className="printable bg-white p-6 sm:p-10 border border-black/10 max-w-3xl mx-auto relative" style={{ aspectRatio: '210 / 297' }}>
+        <QuizBar
+          cell={activeQuiz}
+          triesLeft={triesLeft}
+          feedback={feedback}
+          onSubmit={onQuizSubmit}
+          onCancel={onQuizCancel}
+          onPlayNote={() => activeQuiz && playOneNote(activeQuiz.note)}
+        />
         <h2 className="printable-title text-2xl font-bold text-center mb-3">
           {(KEYS.find((k) => k.value === keyStr) || {}).label} — {startStr} to {endStr}
         </h2>
         <div className="vex-wrap mb-6 flex justify-center">
-          <VexScore scaleNotes={scaleNotes} placements={placements} keyStr={keyStr} />
+          <VexScore scaleNotes={scaleNotes} placements={placements} keyStr={keyStr} activeIndex={activeIndex} />
         </div>
-        <ChartDiagram scaleNotes={scaleNotes} placements={placements} />
+        <ChartDiagram
+          scaleNotes={scaleNotes}
+          placements={placements}
+          activeIndex={activeIndex}
+          hiddenKeys={hiddenKeys}
+          solvedKeys={solvedKeys}
+          activeQuizKey={activeQuiz?.key}
+          onCellClick={onQuizCellClick}
+        />
       </div>
     </div>
   );

@@ -9,13 +9,26 @@ const LABEL_COL_PX = 52; // 3.25rem
 const MAX_PAD = 36;      // trapezoidal horizontal pad (px) at the nut
 const STRING_COUNT = 4;
 
-export default function ChartDiagram({ placements }) {
+export default function ChartDiagram({ placements, activeIndex, hiddenKeys, solvedKeys, activeQuizKey, onCellClick }) {
   const grid = {};
   for (const s of STRINGS) grid[s] = {};
-  for (const { note, fp } of placements) {
-    if (!fp) continue;
-    grid[fp.string][fp.row] = { display: formatNote(note), label: fp.label };
-  }
+  placements.forEach(({ note, fp }, i) => {
+    if (!fp) return;
+    const key = `${fp.string}:${fp.row}`;
+    grid[fp.string][fp.row] = {
+      key,
+      display: formatNote(note),
+      label: fp.label,
+      note,
+      fingerLabel: fp.label,
+      string: fp.string,
+      row: fp.row,
+      isActive: i === activeIndex,
+    };
+  });
+  const hidden = hiddenKeys || new Set();
+  const solved = solvedKeys || new Set();
+  const isHidden = (key) => hidden.has(key) && !solved.has(key);
 
   // Row 0 handled by G/D/A/E header. Render fingers 1-4 always, plus any
   // 2nd-position rows that contain a note.
@@ -55,9 +68,29 @@ export default function ChartDiagram({ placements }) {
         style={{ paddingInline: padFor(0) }}
       >
         <div className="open-label text-right pr-2 text-sm font-semibold italic leading-none">(Open)</div>
-        {STRINGS.map((s) => (
-          <div key={s} className="string-label text-center text-xl font-bold leading-none">{s}</div>
-        ))}
+        {STRINGS.map((s) => {
+          const cell = grid[s][0];
+          const openActive = cell?.isActive;
+          const hiddenHere = cell && isHidden(cell.key);
+          const isQuizActive = cell && activeQuizKey === cell.key;
+          const base = 'open-circle w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-black text-center text-lg sm:text-xl font-bold leading-[2.75rem] sm:leading-[3.25rem] transition-colors';
+          const activeCls = openActive
+            ? 'bg-yellow-200 text-black'
+            : hiddenHere
+              ? (isQuizActive ? 'bg-yellow-100 text-black cursor-pointer' : 'bg-white text-black cursor-pointer')
+              : 'bg-black text-white';
+          return (
+            <div key={s} className="string-label flex justify-center">
+              <div
+                className={`${base} ${activeCls}`}
+                onClick={hiddenHere ? () => onCellClick?.(cell) : undefined}
+                role={hiddenHere ? 'button' : undefined}
+              >
+                {hiddenHere ? '?' : s}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div ref={bodyRef} className="chart-body relative">
@@ -97,9 +130,16 @@ export default function ChartDiagram({ placements }) {
             {STRINGS.map((s) => {
               const cell = grid[s][row];
               const showFpLabel = cell?.label && cell.label !== String(rowLabelFor(row));
+              const hiddenHere = cell && isHidden(cell.key);
+              const isQuizActive = cell && activeQuizKey === cell.key;
+              const bg = cell?.isActive
+                ? 'bg-yellow-200 text-black'
+                : hiddenHere
+                  ? (isQuizActive ? 'bg-yellow-100 text-black cursor-pointer' : 'bg-white text-black cursor-pointer')
+                  : 'bg-white';
               return (
                 <div key={s} className="cell relative flex items-center justify-center">
-                  {showFpLabel && (
+                  {showFpLabel && !hiddenHere && (
                     <span
                       className="fp-label absolute text-xs font-semibold whitespace-nowrap leading-none"
                       style={{ right: 'calc(50% + 1.6rem + 10px)' }}
@@ -107,8 +147,12 @@ export default function ChartDiagram({ placements }) {
                       {cell.label}
                     </span>
                   )}
-                  <div className="circle w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-black bg-white text-center text-sm font-semibold leading-[2.75rem] sm:leading-[3.25rem]">
-                    {cell ? cell.display : ''}
+                  <div
+                    className={`circle w-12 h-12 sm:w-14 sm:h-14 rounded-full border-2 border-black text-center text-sm font-semibold leading-[2.75rem] sm:leading-[3.25rem] transition-colors ${bg}`}
+                    onClick={hiddenHere ? () => onCellClick?.(cell) : undefined}
+                    role={hiddenHere ? 'button' : undefined}
+                  >
+                    {hiddenHere ? '?' : cell ? cell.display : ''}
                   </div>
                 </div>
               );
